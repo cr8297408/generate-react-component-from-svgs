@@ -10,12 +10,16 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@svgr/plugin-jsx": "^8.1.0",
+    "@svgr/plugin-prettier": "^8.1.0",
+    "@svgr/plugin-svgo": "^8.1.0",
     "@types/node": "^22.10.5",
     "fs-extra": "^11.2.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.7.3"
   },
   "devDependencies": {
+    "@svgr/core": "^8.1.0",
     "@types/fs-extra": "^11.0.4"
   }
 }

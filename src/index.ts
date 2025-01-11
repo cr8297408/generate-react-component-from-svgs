@@ -1,58 +1,77 @@
 import * as fs from 'fs-extra';
 import * as path from 'path';
+import { transform } from '@svgr/core';
 
-const inputFolder = './src/svgs';
-const outputFolder = './src/components';
+const processSVGs = async () => {
+  const inputFolder = './src/svgs';
+  const outputFolder = './src/components';
 
-// Capitalize the first letter of a string
-const capitalize = (str: string) => str.charAt(0).toUpperCase() + str.slice(1);
+  const files = await fs.readdir(inputFolder);
+  for (const file of files) {
+    if (path.extname(file) === '.svg') {
+      // Leer el contenido del SVG
+      const svgCode = await fs.readFile(path.join(inputFolder, file), 'utf-8');
 
-// Convert kebab-case or snake_case to PascalCase
-const toPascalCase = (str: string) =>
-  str
-    .replace(/[-_](.)/g, (_, char) => char.toUpperCase())
-    .replace(/^(.)/, (_, char) => char.toUpperCase());
+      const componentName = generateComponentName(file);
 
+      // Transformar el SVG en código JSX usando SVGR
+      const jsCode = await transform(
+        svgCode,
+        {
+          plugins: [
+            '@svgr/plugin-svgo',
+            '@svgr/plugin-jsx',
+            '@svgr/plugin-prettier',
+          ],
+          icon: true,
+        },
+        { componentName: componentName }
+      );
+
+      // Reemplazar la exportación por defecto con la exportación nombrada
+      const modifiedJsCode = jsCode.replace(/export default (\w+)/, '');
+
+      // Modificar el código para incluir la interfaz y cambiar props a ({ size = 16 }: SVGarbIconProps)
+      const finalJsCode = modifiedJsCode
+        .replace(
+          `const ${componentName} = (props) =>`,
+          `export const ${generateComponentName(
+            file
+          )} = ({ size = 16 }: ${componentName}Props) =>`
+        )
+        .replace('width="1em"', `width={size / 16 + 'rem'}`)
+        .replace('height="1em"', '')
+        .replace(
+          'import * as React from "react";',
+          `import * as React from "react";
+
+export interface ${componentName}Props {
+  size?: number;
+}
+`
+        )
+        .replace('{...props}', '');
+
+      // Crear la ruta de salida para el componente
+      const outputFilePath = path.join(outputFolder, `${componentName}.tsx`);
+
+      // Escribir el archivo del componente generado
+      await fs.outputFile(outputFilePath, finalJsCode.trim());
+      console.log(`Generated ${outputFilePath}`);
+    }
+  }
+};
+
+// Función para generar el nombre del componente
 const generateComponentName = (fileName: string) => {
   const baseName = path.basename(fileName, path.extname(fileName));
   return toPascalCase('SVG' + baseName) + 'Icon';
 };
 
-const generateComponentContent = (
-  svgContent: string,
-  componentName: string
-) => `
-import * as React from "react";
-
-export interface ${componentName}Props {
-  size?: number;
-}
-
-export const ${componentName} = ({ size = 16 }: ${componentName}Props) => (
-  ${svgContent
-    .replace(/<svg([^>]*)>/, '<svg width={size + "px"} height={size + "px"}$1>')
-    .replace(/fill-rule/g, 'fillRule')}
-);
-`;
-
-const processSVGs = async () => {
-  const files = await fs.readdir(inputFolder);
-  for (const file of files) {
-    if (path.extname(file) === '.svg') {
-      const svgContent = await fs.readFile(
-        path.join(inputFolder, file),
-        'utf-8'
-      );
-      const componentName = generateComponentName(file);
-      const componentContent = generateComponentContent(
-        svgContent,
-        componentName
-      );
-      const outputFilePath = path.join(outputFolder, `${componentName}.tsx`);
-      await fs.outputFile(outputFilePath, componentContent.trim());
-      console.log(`Generated ${outputFilePath}`);
-    }
-  }
-};
+// Convertir kebab-case o snake_case a PascalCase
+const toPascalCase = (str: string) =>
+  str
+    .replace(/[-_](.)/g, (_, char) => char.toUpperCase())
+    .replace(/^(.)/, (_, char) => char.toUpperCase());
 
 processSVGs().catch(console.error);
